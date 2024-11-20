@@ -1,5 +1,6 @@
-import { Form, useActionData } from "@remix-run/react";
+import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { validateText } from "../.server/validation";
+import { createTodoItem, getTodoItems } from "../models/todo";
 // import { client } from "../mongoClient.server";
 
 export const meta = () => {
@@ -10,7 +11,13 @@ export const meta = () => {
 };
 
 export async function loader() {
-  return null;
+  let result = await getTodoItems();
+  let todoItems = Array.from(result).map((item) => ({
+    ...item,
+    _id: item._id.toString(),
+  }));
+
+  return todoItems;
 }
 
 export async function action({ request }) {
@@ -27,30 +34,17 @@ export async function action({ request }) {
   }
 
   // Save the todo item to the database
+  let result = await createTodoItem(todo);
+  console.log({ result });
 
   return null;
 }
 
 export default function Index() {
-  let actionData = useActionData();
+  let todoItems = useLoaderData();
+  console.log({ todoItems });
 
-  let todoItems = [
-    {
-      id: 1,
-      item: "Jog around",
-      isComplete: false,
-    },
-    {
-      id: 2,
-      item: "10 minutes meditation",
-      isComplete: false,
-    },
-    {
-      id: 3,
-      item: "Read for one hour",
-      isComplete: false,
-    },
-  ];
+  let actionData = useActionData();
 
   return (
     <main>
@@ -82,7 +76,7 @@ export default function Index() {
         {/* Todo items from the database */}
         <div className="bg-slate-500 p-4 rounded-md mt-8 divide-y divide-slate-600">
           {todoItems.map((todoItem) => (
-            <TodoItem key={todoItem.id} item={todoItem} />
+            <TodoItem key={todoItem._id} item={todoItem} />
           ))}
         </div>
       </div>
@@ -93,8 +87,8 @@ export default function Index() {
 function TodoItem({ item }) {
   return (
     <div className="flex gap-2 py-2">
-      <input type="checkbox" name="complete" id={item.id} />
-      <label htmlFor={item.id}>{item.item}</label>
+      <input type="checkbox" name="complete" id={item._id} />
+      <label htmlFor={item._id}>{item.item}</label>
     </div>
   );
 }
