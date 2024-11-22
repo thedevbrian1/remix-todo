@@ -1,7 +1,18 @@
-import { Form, useActionData, useLoaderData } from "@remix-run/react";
+import {
+  Form,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useSubmit,
+} from "@remix-run/react";
 import { validateText } from "../.server/validation";
-import { createTodoItem, getTodoItems } from "../models/todo";
-// import { client } from "../mongoClient.server";
+import {
+  createTodoItem,
+  deleteTodoItem,
+  getTodoItems,
+  updateTodoItem,
+} from "../models/todo";
+import { useEffect, useRef } from "react";
 
 export const meta = () => {
   return [
@@ -22,35 +33,76 @@ export async function loader() {
 
 export async function action({ request }) {
   let formData = await request.formData();
-  let todo = formData.get("todo");
+  let action = formData.get("_action");
 
-  let fieldErrors = {
-    todo: validateText(todo),
-  };
+  switch (action) {
+    case "create": {
+      let todo = formData.get("todo");
 
-  // Return errors if any
-  if (Object.values(fieldErrors).some(Boolean)) {
-    return { fieldErrors };
+      let fieldErrors = {
+        todo: validateText(todo),
+      };
+
+      // Return errors if any
+      if (Object.values(fieldErrors).some(Boolean)) {
+        return { fieldErrors };
+      }
+
+      // Save the todo item to the database
+      let result = await createTodoItem(todo);
+      console.log({ result });
+      break;
+    }
+    case "update": {
+      console.log("is updating...");
+      // Update isComplete to the database
+      let id = formData.get("id");
+      let result = await updateTodoItem(id);
+      console.log({ result });
+      break;
+    }
+    case "delete": {
+      let id = formData.get("id");
+      let result = await deleteTodoItem(id);
+      break;
+    }
   }
-
-  // Save the todo item to the database
-  let result = await createTodoItem(todo);
-  console.log({ result });
 
   return null;
 }
 
 export default function Index() {
   let todoItems = useLoaderData();
-  console.log({ todoItems });
 
   let actionData = useActionData();
+  let navigation = useNavigation();
+
+  let isSubmitting = navigation.state === "submitting";
+
+  let formRef = useRef(null);
+
+  useEffect(() => {
+    // Clear the form input after submission
+    if (!isSubmitting) {
+      formRef.current?.reset();
+    }
+  }, [isSubmitting]);
 
   return (
     <main>
-      <div className="w-full mt-32 max-w-2xl mx-auto">
+      <div className={`w-full mt-32 max-w-2xl mx-auto`}>
+        {navigation.state !== "idle" ? (
+          <div className="absolute inset-0 min-h-screen grid place-items-center bg-black/50">
+            <img src="/ball-triangle.svg" alt="" />
+          </div>
+        ) : null}
         <h1>Todo</h1>
-        <Form method="post" className="bg-slate-500 p-4 rounded-md">
+        <Form
+          method="post"
+          className="bg-slate-500 p-4 rounded-md"
+          ref={formRef}
+        >
+          <input type="hidden" name="_action" value="create" />
           <div className="flex items-center gap-4">
             <input
               type="checkbox"
@@ -74,21 +126,49 @@ export default function Index() {
         </Form>
 
         {/* Todo items from the database */}
-        <div className="bg-slate-500 p-4 rounded-md mt-8 divide-y divide-slate-600">
+        <ul className="bg-slate-500 p-4 rounded-md mt-8 divide-y divide-slate-600">
           {todoItems.map((todoItem) => (
             <TodoItem key={todoItem._id} item={todoItem} />
           ))}
-        </div>
+        </ul>
       </div>
     </main>
   );
 }
 
+// Item component
 function TodoItem({ item }) {
+  let submit = useSubmit();
   return (
-    <div className="flex gap-2 py-2">
-      <input type="checkbox" name="complete" id={item._id} />
-      <label htmlFor={item._id}>{item.item}</label>
-    </div>
+    <li className="flex justify-between items-center py-2">
+      <Form method="post" className="flex gap-2">
+        <input type="hidden" name="id" value={item._id} />
+        <input type="hidden" name="_action" value="update" />
+        <input
+          type="checkbox"
+          name="complete"
+          id={item._id}
+          defaultChecked={item.isComplete}
+          onChange={(event) => submit(event.target.form)}
+        />
+        <label
+          htmlFor={item._id}
+          className={item.isComplete ? "line-through" : ""}
+        >
+          {item.item}
+        </label>
+      </Form>
+      <Form method="post">
+        <input type="hidden" name="id" value={item._id} />
+        <button
+          type="submit"
+          name="_action"
+          value="delete"
+          className="active:scale-[.97] transition ease-in-out duration-300 bg-red-500 p-2"
+        >
+          X
+        </button>
+      </Form>
+    </li>
   );
 }
